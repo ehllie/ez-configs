@@ -1,8 +1,8 @@
-{ darwin, home-manager, ... }: inputs@{ lib, config, ... }:
+{ darwin, home-manager, nixpkgs, ... }: inputs@{ lib, config, ... }:
 let
 
   inherit (builtins) listToAttrs pathExists;
-  inherit (lib) mkOption types concatMap mapAttrsToList nixosSystem optionals;
+  inherit (nixpkgs.lib) mkOption types concatMap mapAttrsToList nixosSystem optionals;
   inherit (darwin.lib) darwinSystem;
   inherit (home-manager.lib) homeManagerConfiguration;
   cfg = config.ezConfigs;
