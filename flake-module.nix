@@ -48,7 +48,7 @@ let
   # Creates home-manager confgurations for each user on each host.
   # Tries to import users/${user} for each user.
   # Conditionally imports home/darwin and home/linux based on the host system.
-  userConfigs = { directory, extraSpecialArgs }: users:
+  userConfigs = { directory, usersDirectory, extraSpecialArgs }: users:
     listToAttrs (concatMap
       ({ host, pkgs, ... }:
         let
@@ -59,9 +59,9 @@ let
             name = "${name}@${host}";
             value = homeManagerConfiguration {
               inherit pkgs extraSpecialArgs;
-              modules = [ (importModule directory) (importModule "${directory}/${name}") ] ++
-                optionals isDarwin [ (importModule "${directory}/darwin") ] ++
-                optionals isLinux [ (importModule "${directory}/linux") ];
+              modules = [ (importModule directory) (importModule "${usersDirectory}/${name}") ] ++
+                optionals isDarwin [ (importModule "${directory}/darwin") (importModule "${usersDirectory}/darwin") ] ++
+                optionals isLinux [ (importModule "${directory}/linux") (importModule "${usersDirectory}/linux") ];
             };
           })
           users)
@@ -110,6 +110,14 @@ in
         type = types.pathInStore;
         description = ''
           The directory in which to look for home-manager configurations.
+        '';
+      };
+
+      usersDirectory = mkOption {
+        default = "${cfg.root}/users";
+        type = types.pathInStore;
+        description = ''
+          The directory in which to look for user specific home-manager configurations.
         '';
       };
 
@@ -195,6 +203,7 @@ in
       {
         inherit (cfg.hm)
           directory
+          usersDirectory
           extraSpecialArgs;
       }
       cfg.hm.users;
