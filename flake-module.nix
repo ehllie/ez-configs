@@ -70,7 +70,7 @@ let
 
   hostDefinition.options = {
     name = mkOption {
-      type = types.string;
+      type = types.str;
       description = "The hostname of the system.";
     };
 
@@ -82,7 +82,7 @@ let
 
   userDefinition.options = {
     name = mkOption {
-      type = types.string;
+      type = types.str;
       description = "The name of the user.";
     };
   };
@@ -100,7 +100,7 @@ in
     hm = {
       directory = mkOption {
         default = "home";
-        type = types.string;
+        type = types.str;
         description = ''
           The directory in which to look for home-manager configurations.
         '';
@@ -115,7 +115,7 @@ in
     nixos = {
       directory = mkOption {
         default = "nixos";
-        type = types.string;
+        type = types.str;
         description = ''
           The directory in which to look for nixos configurations.
         '';
@@ -123,7 +123,7 @@ in
 
       hostDirectory = mkOption {
         default = "hosts";
-        type = types.string;
+        type = types.str;
         description = ''
           The directory in which to look for host specific nixos configurations.
         '';
@@ -138,7 +138,7 @@ in
     darwin = {
       directory = mkOption {
         default = "darwin";
-        type = types.string;
+        type = types.str;
         description = ''
           The directory in which to look for darwin configurations.
         '';
@@ -147,7 +147,7 @@ in
 
       hostDirectory = mkOption {
         default = "hosts";
-        type = types.string;
+        type = types.str;
         description = ''
           The directory in which to look for host specific darwin configurations.
         '';
