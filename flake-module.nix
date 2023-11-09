@@ -12,8 +12,8 @@ let
   # First check for a `.nix` file, then a directory.
   importModule = name:
     let
-      file = cfg.root + "/${name}.nix";
-      dir = cfg.root + "/${name}";
+      file = "${name}.nix";
+      dir = "${name}";
     in
     if pathExists file then file
     else if pathExists dir then dir
@@ -106,8 +106,8 @@ in
 
     hm = {
       directory = mkOption {
-        default = "home";
-        type = types.str;
+        default = "${cfg.root}/home";
+        type = types.pathInStore;
         description = ''
           The directory in which to look for home-manager configurations.
         '';
@@ -129,8 +129,8 @@ in
 
     nixos = {
       directory = mkOption {
-        default = "nixos";
-        type = types.str;
+        default = "${cfg.root}/nixos";
+        type = types.pathInStore;
         description = ''
           The directory in which to look for nixos configurations.
         '';
@@ -145,8 +145,8 @@ in
       };
 
       hostsDirectory = mkOption {
-        default = "hosts";
-        type = types.str;
+        default = "${cfg.root}/hosts";
+        type = types.pathInStore;
         description = ''
           The directory in which to look for host specific nixos configurations.
         '';
@@ -160,8 +160,8 @@ in
 
     darwin = {
       directory = mkOption {
-        default = "darwin";
-        type = types.str;
+        default = "${cfg.root}/darwin";
+        type = types.pathInStore;
         description = ''
           The directory in which to look for darwin configurations.
         '';
@@ -176,8 +176,8 @@ in
       };
 
       hostsDirectory = mkOption {
-        default = "hosts";
-        type = types.str;
+        default = "${cfg.root}/hosts";
+        type = types.pathInStore;
         description = ''
           The directory in which to look for host specific darwin configurations.
         '';
