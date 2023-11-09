@@ -55,12 +55,12 @@ let
           inherit (pkgs.stdenv) isDarwin isLinux;
         in
         map
-          (user: {
-            name = "${user}@${host}";
+          ({ name }: {
+            name = "${name}@${host}";
             value = homeManagerConfiguration {
               inherit pkgs;
               extraSpecialArgs = { inherit inputs; };
-              modules = [ ./home (importModule "${cfg.hm.directory}/${user}") ] ++
+              modules = [ ./home (importModule "${cfg.hm.directory}/${name}") ] ++
                 optionals isDarwin [ (importModule "${cfg.hm.directory}/darwin") ] ++
                 optionals isLinux [ (importModule "${cfg.hm.directory}/linux") ];
             };
