@@ -1,4 +1,4 @@
-{ darwin, home-manager, nixpkgs, ... }: inputs@{ lib, config, ... }:
+{ darwin, home-manager, nixpkgs, ... }: { lib, config, ... }:
 let
 
   inherit (builtins) listToAttrs pathExists;
@@ -23,13 +23,13 @@ let
   # systemBuilder: The function to use to build the system. i.e. nixosSystem or darwinSystem
   # defaultModule: The module to always include in the system. i.e. ./nixos or ./darwin
   # hosts: A list of host declarations. i.e. [ { host = "foo"; system = "aarch64-darwin"; } ... ]
-  systemsWith = { systemBuilder, systemSuffix, defaultModules, hostsDirectory }: hosts:
+  systemsWith = { systemBuilder, systemSuffix, defaultModules, hostsDirectory, specialArgs }: hosts:
     listToAttrs (map
       ({ name, arch }: {
         inherit name;
         value = systemBuilder {
+          inherit specialArgs;
           system = "${arch}-${systemSuffix}";
-          specialArgs = { inherit inputs; };
           modules = defaultModules ++ [
             (importModule "${hostsDirectory}/${name}")
           ];
@@ -48,7 +48,7 @@ let
   # Creates home-manager confgurations for each user on each host.
   # Tries to import users/${user} for each user.
   # Conditionally imports home/darwin and home/linux based on the host system.
-  userConfigs = users:
+  userConfigs = { directory, extraSpecialArgs }: users:
     listToAttrs (concatMap
       ({ host, pkgs, ... }:
         let
@@ -58,11 +58,10 @@ let
           ({ name }: {
             name = "${name}@${host}";
             value = homeManagerConfiguration {
-              inherit pkgs;
-              extraSpecialArgs = { inherit inputs; };
-              modules = [ ./home (importModule "${cfg.hm.directory}/${name}") ] ++
-                optionals isDarwin [ (importModule "${cfg.hm.directory}/darwin") ] ++
-                optionals isLinux [ (importModule "${cfg.hm.directory}/linux") ];
+              inherit pkgs extraSpecialArgs;
+              modules = [ ./home (importModule "${directory}/${name}") ] ++
+                optionals isDarwin [ (importModule "${directory}/darwin") ] ++
+                optionals isLinux [ (importModule "${directory}/linux") ];
             };
           })
           users)
@@ -97,12 +96,28 @@ in
       '';
     };
 
+    globalArgs = mkOption {
+      default = { };
+      type = types.attrsOf types.anything;
+      description = ''
+        Extra arguments to pass to all systems.
+      '';
+    };
+
     hm = {
       directory = mkOption {
         default = "home";
         type = types.str;
         description = ''
           The directory in which to look for home-manager configurations.
+        '';
+      };
+
+      extraSpecialArgs = mkOption {
+        default = cfg.globalArgs;
+        type = types.attrsOf types.anything;
+        description = ''
+          Extra arguments to pass to all home-manager configurations.
         '';
       };
 
@@ -121,7 +136,15 @@ in
         '';
       };
 
-      hostDirectory = mkOption {
+      specialArgs = mkOption {
+        default = cfg.globalArgs;
+        type = types.attrsOf types.anything;
+        description = ''
+          Extra arguments to pass to all nixos configurations.
+        '';
+      };
+
+      hostsDirectory = mkOption {
         default = "hosts";
         type = types.str;
         description = ''
@@ -144,8 +167,15 @@ in
         '';
       };
 
+      specialArgs = mkOption {
+        default = cfg.globalArgs;
+        type = types.attrsOf types.anything;
+        description = ''
+          Extra arguments to pass to all darwin configurations.
+        '';
+      };
 
-      hostDirectory = mkOption {
+      hostsDirectory = mkOption {
         default = "hosts";
         type = types.str;
         description = ''
@@ -161,14 +191,20 @@ in
   };
 
   config.flake = {
-    homeConfigurations = userConfigs cfg.hm.users;
+    homeConfigurations = userConfigs
+      {
+        inherit (cfg.hm)
+          directory
+          extraSpecialArgs;
+      }
+      cfg.hm.users;
 
     nixosConfigurations = systemsWith
       {
         systemBuilder = nixosSystem;
         systemSuffix = "linux";
         defaultModules = [ (importModule "${cfg.nixos.directory}") ];
-        hostsDirectory = cfg.nixos.hostDirectory;
+        inherit (cfg.nixos) hostsDirectory specialArgs;
       }
       cfg.nixos.hosts;
 
@@ -177,7 +213,7 @@ in
         systemBuilder = darwinSystem;
         systemSuffix = "darwin";
         defaultModules = [ (importModule "${cfg.darwin.directory}") ];
-        hostsDirectory = cfg.darwin.hostDirectory;
+        inherit (cfg.darwin) hostsDirectory specialArgs;
       }
       cfg.darwin.hosts;
   };
