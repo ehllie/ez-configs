@@ -59,7 +59,7 @@ let
             name = "${name}@${host}";
             value = homeManagerConfiguration {
               inherit pkgs extraSpecialArgs;
-              modules = [ ./home (importModule "${directory}/${name}") ] ++
+              modules = [ (importModule directory) (importModule "${directory}/${name}") ] ++
                 optionals isDarwin [ (importModule "${directory}/darwin") ] ++
                 optionals isLinux [ (importModule "${directory}/linux") ];
             };
