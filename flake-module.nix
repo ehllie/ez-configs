@@ -42,8 +42,8 @@ let
   allHosts = mapAttrsToList
     (host: systemConf: systemConf //
       { inherit host; })
-    (config.nixosConfigurations //
-      config.darwinConfigurations);
+    (config.flake.nixosConfigurations //
+      config.flake.darwinConfigurations);
 
   # Creates home-manager confgurations for each user on each host.
   # Tries to import users/${user} for each user.
