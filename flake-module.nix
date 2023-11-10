@@ -90,6 +90,7 @@ in
 {
   options.ezConfigs = {
     root = mkOption {
+      default = ./.;
       type = types.pathInStore;
       description = ''
         The root from which configuration modules should be searched. You most likely want this to be `./.` or `self`.
