@@ -1,3 +1,4 @@
+# This is the module that will be imported with the `homeManagerConfigurations.example-user@<system>` configuration
 { pkgs, ... }:
 {
   home = {

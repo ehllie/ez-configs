@@ -1,3 +1,5 @@
+# This is the default darwin module.
+# It will be included with any darwin host configuration that has `importDefault = true`, which is the default
 { pkgs, lib, ... }:
 {
   services.nix-daemon.enable = true;

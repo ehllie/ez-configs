@@ -1,8 +1,8 @@
 { darwin, home-manager, nixpkgs, ... }: { lib, config, ... }:
 let
 
-  inherit (builtins) listToAttrs pathExists;
-  inherit (nixpkgs.lib) mkOption types concatMap mapAttrsToList nixosSystem optionals;
+  inherit (builtins) pathExists;
+  inherit (nixpkgs.lib) mkOption types nixosSystem optionals literalExpression mapAttrs concatMapAttrs;
   inherit (darwin.lib) darwinSystem;
   inherit (home-manager.lib) homeManagerConfiguration;
   cfg = config.ezConfigs;
@@ -13,76 +13,132 @@ let
   importModule = name:
     let
       file = "${name}.nix";
-      dir = "${name}";
+      dir = "${name}/default.nix";
     in
     if pathExists file then file
     else if pathExists dir then dir
     else { };
 
-  # Generates an atterset of nixosConfigurations or darwinConfigurations.
-  # systemBuilder: The function to use to build the system. i.e. nixosSystem or darwinSystem
-  # defaultModule: The module to always include in the system. i.e. ./nixos or ./darwin
-  # hosts: A list of host declarations. i.e. [ { host = "foo"; system = "aarch64-darwin"; } ... ]
-  systemsWith = { systemBuilder, systemSuffix, defaultModules, hostsDirectory, specialArgs }: hosts:
-    listToAttrs (map
-      ({ name, arch }: {
-        inherit name;
-        value = systemBuilder {
-          inherit specialArgs;
-          system = "${arch}-${systemSuffix}";
-          modules = defaultModules ++ [
-            (importModule "${hostsDirectory}/${name}")
-          ];
-        };
+  # Creates an attrset of nixosConfigurations or darwinConfigurations.
+  systemsWith = { systemBuilder, systemSuffix, modulesDirectory, hostsDirectory, specialArgs }: hosts:
+    mapAttrs
+      (name: { arch, importDefault }: systemBuilder {
+        inherit specialArgs;
+        system = "${arch}-${systemSuffix}";
+        modules = [ (importModule "${hostsDirectory}/${name}") ]
+          ++ optionals importDefault [ (importModule "${modulesDirectory}") ];
       })
-      hosts);
+      hosts;
 
-  # Combined list attrsets containing the hostname
-  # and it's configuration for all nixos and darwin systems.
-  allHosts = mapAttrsToList
-    (host: systemConf: systemConf //
-      { inherit host; })
+  allHosts =
     (config.flake.nixosConfigurations //
       config.flake.darwinConfigurations);
 
-  # Creates home-manager confgurations for each user on each host.
-  # Tries to import users/${user} for each user.
-  # Conditionally imports home/darwin and home/linux based on the host system.
-  userConfigs = { directory, usersDirectory, extraSpecialArgs }: users:
-    listToAttrs (concatMap
-      ({ host, pkgs, ... }:
+  # Creates an attrset of home manager confgurations for each user on each host.
+  userConfigs = { modulesDirectory, usersDirectory, extraSpecialArgs }: users:
+    concatMapAttrs
+      (user: { importDefault, nameFunction }:
         let
-          inherit (pkgs.stdenv) isDarwin isLinux;
+          mkName =
+            if nameFunction == null
+            then host: "${user}@${host}"
+            else nameFunction;
         in
-        map
-          ({ name }: {
-            name = "${name}@${host}";
-            value = homeManagerConfiguration {
-              inherit pkgs extraSpecialArgs;
-              modules = [ (importModule directory) (importModule "${usersDirectory}/${name}") ] ++
-                optionals isDarwin [ (importModule "${directory}/darwin") (importModule "${usersDirectory}/darwin") ] ++
-                optionals isLinux [ (importModule "${directory}/linux") (importModule "${usersDirectory}/linux") ];
-            };
-          })
-          users)
-      allHosts);
+        concatMapAttrs
+          (host: { pkgs, ... }:
+            let
+              inherit (pkgs.stdenv) isDarwin isLinux;
+              name = mkName host;
+            in
+            {
+              ${name} = homeManagerConfiguration {
+                inherit pkgs extraSpecialArgs;
+                modules = [ (importModule "${usersDirectory}/${user}") ] ++ # user module
+                  optionals importDefault [ (importModule "${modulesDirectory}") ] ++ # default module
+                  optionals isDarwin ([ (importModule "${usersDirectory}/${user}/darwin") ] ++ # user darwin module
+                    optionals importDefault [ (importModule "${modulesDirectory}/darwin") ]) ++ # default darwin module
+                  optionals isLinux ([ (importModule "${usersDirectory}/${user}/linux") ] ++ # user linux module
+                    optionals importDefault [ (importModule "${modulesDirectory}/linux") ]); # default linux module
+              };
+            })
+          allHosts)
+      users;
 
-  hostDefinition.options = {
-    name = mkOption {
-      type = types.str;
-      description = "The hostname of the system.";
-    };
-
+  hostOptions.options = {
     arch = mkOption {
       type = types.enum [ "x86_64" "aarch64" ];
       description = "The architecture of the system.";
     };
+
+    importDefault = mkOption {
+      default = true;
+      type = types.bool;
+      description = ''
+        Whether to import the default module for this host.
+      '';
+    };
   };
 
-  userDefinition.options = {
-    name = mkOption {
-      type = types.str;
-      description = "The name of the user.";
+  userOptions.options = {
+    nameFunction = mkOption {
+      type = types.nullOr (types.functionTo types.str);
+      default = null;
+      defaultText = literalExpression "\${username}@\${hostname}";
+      example = literalExpression "(host: \"\${host}-\${name})\")";
+      description = ''
+        Function to generate the name of the user configuration using the host name.
+      '';
+    };
+
+    importDefault = mkOption {
+      default = true;
+      type = types.bool;
+      description = ''
+        Whether to import the default module for this user.
+      '';
+    };
+  };
+
+  hostsOptions = system: {
+    modulesDirectory = mkOption {
+      default = "${cfg.root}/${system}";
+      defaultText = literalExpression "\"\${ezConfigs.root}/${system}\"";
+      type = types.pathInStore;
+      description = ''
+        The directory in which to look for ${system} modules.
+      '';
+    };
+
+    hostsDirectory = mkOption {
+      default = "${cfg.root}/hosts";
+      defaultText = literalExpression "\"\${ezConfigs.root}/hosts\"";
+      type = types.pathInStore;
+      description = ''
+        The directory in which to look for host ${system} configurations.
+      '';
+    };
+
+    specialArgs = mkOption {
+      default = cfg.globalArgs;
+      defaultText = literalExpression "ezConfigs.globalArgs";
+      type = types.attrsOf types.anything;
+      description = ''
+        Extra arguments to pass to all ${system} configurations.
+      '';
+    };
+
+    hosts = mkOption {
+      default = { };
+      type = types.attrsOf (types.submodule hostOptions);
+      example = literalExpression ''
+        {
+          hostA.arch = "x86_64";
+          hostB.arch = "aarch64";
+        }
+      '';
+      description = ''
+        An attribute set of ${system} host definitions to create configurations for.
+      '';
     };
   };
 
@@ -90,15 +146,16 @@ in
 {
   options.ezConfigs = {
     root = mkOption {
-      default = ./.;
       type = types.pathInStore;
+      example = literalExpression "./.";
       description = ''
-        The root from which configuration modules should be searched. You most likely want this to be `./.` or `self`.
+        The root from which configuration modules should be searched.
       '';
     };
 
     globalArgs = mkOption {
       default = { };
+      example = literalExpression "{ inherit inputs; }";
       type = types.attrsOf types.anything;
       description = ''
         Extra arguments to pass to all systems.
@@ -106,8 +163,9 @@ in
     };
 
     hm = {
-      directory = mkOption {
+      modulesDirectory = mkOption {
         default = "${cfg.root}/home";
+        defaultText = "\${ezConfigs.root}/home";
         type = types.pathInStore;
         description = ''
           The directory in which to look for home-manager configurations.
@@ -116,6 +174,7 @@ in
 
       usersDirectory = mkOption {
         default = "${cfg.root}/users";
+        defaultText = literalExpression "\"\${ezConfigs.root}/users\"";
         type = types.pathInStore;
         description = ''
           The directory in which to look for user specific home-manager configurations.
@@ -124,6 +183,7 @@ in
 
       extraSpecialArgs = mkOption {
         default = cfg.globalArgs;
+        defaultText = literalExpression "ezConfigs.globalArgs";
         type = types.attrsOf types.anything;
         description = ''
           Extra arguments to pass to all home-manager configurations.
@@ -132,87 +192,31 @@ in
 
       users = mkOption {
         default = [ ];
-        type = types.listOf (types.submodule userDefinition);
+        type = types.attrsOf (types.submodule userOptions);
+
+        example = literalExpression ''
+          {
+            alice = { };
+            bob = { };
+          }
+        '';
+
         description = ''
           A list of user definitions to create home manager configurations for.
         '';
       };
     };
 
-    nixos = {
-      directory = mkOption {
-        default = "${cfg.root}/nixos";
-        type = types.pathInStore;
-        description = ''
-          The directory in which to look for nixos configurations.
-        '';
-      };
+    nixos = hostsOptions "nixos";
 
-      specialArgs = mkOption {
-        default = cfg.globalArgs;
-        type = types.attrsOf types.anything;
-        description = ''
-          Extra arguments to pass to all nixos configurations.
-        '';
-      };
-
-      hostsDirectory = mkOption {
-        default = "${cfg.root}/hosts";
-        type = types.pathInStore;
-        description = ''
-          The directory in which to look for host specific nixos configurations.
-        '';
-      };
-
-      hosts = mkOption {
-        default = [ ];
-        type = types.listOf (types.submodule hostDefinition);
-        description = ''
-          A list of nixos host definitions to create configurations for.
-        '';
-      };
-    };
-
-    darwin = {
-      directory = mkOption {
-        default = "${cfg.root}/darwin";
-        type = types.pathInStore;
-        description = ''
-          The directory in which to look for darwin configurations.
-        '';
-      };
-
-      specialArgs = mkOption {
-        default = cfg.globalArgs;
-        type = types.attrsOf types.anything;
-        description = ''
-          Extra arguments to pass to all darwin configurations.
-        '';
-      };
-
-      hostsDirectory = mkOption {
-        default = "${cfg.root}/hosts";
-        type = types.pathInStore;
-        description = ''
-          The directory in which to look for host specific darwin configurations.
-        '';
-      };
-
-      hosts = mkOption {
-        default = [ ];
-        type = types.listOf (types.submodule hostDefinition);
-        description = ''
-          A list of darwin host definitions to create configurations for.
-        '';
-      };
-    };
+    darwin = hostsOptions "darwin";
   };
 
   config.flake = {
     homeConfigurations = userConfigs
       {
         inherit (cfg.hm)
-          directory
+          modulesDirectory
           usersDirectory
           extraSpecialArgs;
       }
@@ -222,8 +226,10 @@ in
       {
         systemBuilder = nixosSystem;
         systemSuffix = "linux";
-        defaultModules = [ (importModule "${cfg.nixos.directory}") ];
-        inherit (cfg.nixos) hostsDirectory specialArgs;
+        inherit (cfg.nixos)
+          modulesDirectory
+          hostsDirectory
+          specialArgs;
       }
       cfg.nixos.hosts;
 
@@ -231,8 +237,10 @@ in
       {
         systemBuilder = darwinSystem;
         systemSuffix = "darwin";
-        defaultModules = [ (importModule "${cfg.darwin.directory}") ];
-        inherit (cfg.darwin) hostsDirectory specialArgs;
+        inherit (cfg.darwin)
+          modulesDirectory
+          hostsDirectory
+          specialArgs;
       }
       cfg.darwin.hosts;
   };

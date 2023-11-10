@@ -1,3 +1,5 @@
+# This is the default nixos module.
+# It will be included with any nixos host configuration that has `importDefault = true`, which is the default
 { modulesPath, ... }:
 {
   imports = [

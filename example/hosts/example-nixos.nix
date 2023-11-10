@@ -1,3 +1,4 @@
+# This is the module that will be imported with the `nixosConfigurations.example-nixos` system
 {
   fileSystems = {
     "/" = {
