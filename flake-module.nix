@@ -133,6 +133,9 @@ in
       users = mkOption {
         default = [ ];
         type = types.listOf (types.submodule userDefinition);
+        description = ''
+          A list of user definitions to create home manager configurations for.
+        '';
       };
     };
 
@@ -164,6 +167,9 @@ in
       hosts = mkOption {
         default = [ ];
         type = types.listOf (types.submodule hostDefinition);
+        description = ''
+          A list of nixos host definitions to create configurations for.
+        '';
       };
     };
 
@@ -195,6 +201,9 @@ in
       hosts = mkOption {
         default = [ ];
         type = types.listOf (types.submodule hostDefinition);
+        description = ''
+          A list of darwin host definitions to create configurations for.
+        '';
       };
     };
   };
