@@ -1,32 +1,21 @@
 { darwin, home-manager, nixpkgs, ... }: { lib, config, ... }:
 let
 
-  inherit (builtins) pathExists;
+  inherit (builtins) pathExists readDir readFileType;
   inherit (nixpkgs.lib) mkOption types nixosSystem optionals literalExpression mapAttrs concatMapAttrs;
+  inherit (nixpkgs.lib.strings) hasSuffix removeSuffix;
   inherit (darwin.lib) darwinSystem;
   inherit (home-manager.lib) homeManagerConfiguration;
   cfg = config.ezConfigs;
 
-
-  # Import a module of a given name if it exists.
-  # First check for a `.nix` file, then a directory.
-  importModule = name:
-    let
-      file = "${name}.nix";
-      dir = "${name}/default.nix";
-    in
-    if pathExists file then file
-    else if pathExists dir then dir
-    else { };
-
   # Creates an attrset of nixosConfigurations or darwinConfigurations.
-  systemsWith = { systemBuilder, systemSuffix, modulesDirectory, hostsDirectory, specialArgs }: hosts:
+  systemsWith = { systemBuilder, systemSuffix, ezModules, hostModules, specialArgs }: hosts:
     mapAttrs
       (name: { arch, importDefault }: systemBuilder {
-        inherit specialArgs;
+        specialArgs = specialArgs // { inherit ezModules; };
         system = "${arch}-${systemSuffix}";
-        modules = [ (importModule "${hostsDirectory}/${name}") ]
-          ++ optionals importDefault [ (importModule "${modulesDirectory}") ];
+        modules = [ (hostModules.${name} or { }) ]
+          ++ optionals importDefault [ (ezModules.default or { }) ];
       })
       hosts;
 
@@ -35,7 +24,7 @@ let
       config.flake.darwinConfigurations);
 
   # Creates an attrset of home manager confgurations for each user on each host.
-  userConfigs = { modulesDirectory, usersDirectory, extraSpecialArgs }: users:
+  userConfigs = { ezModules, userModules, extraSpecialArgs }: users:
     concatMapAttrs
       (user: { importDefault, nameFunction }:
         let
@@ -52,17 +41,35 @@ let
             in
             {
               ${name} = homeManagerConfiguration {
-                inherit pkgs extraSpecialArgs;
-                modules = [ (importModule "${usersDirectory}/${user}") ] ++ # user module
-                  optionals importDefault [ (importModule "${modulesDirectory}") ] ++ # default module
-                  optionals isDarwin ([ (importModule "${usersDirectory}/${user}/darwin") ] ++ # user darwin module
-                    optionals importDefault [ (importModule "${modulesDirectory}/darwin") ]) ++ # default darwin module
-                  optionals isLinux ([ (importModule "${usersDirectory}/${user}/linux") ] ++ # user linux module
-                    optionals importDefault [ (importModule "${modulesDirectory}/linux") ]); # default linux module
+                inherit pkgs;
+                extraSpecialArgs = extraSpecialArgs // { inherit ezModules; };
+                modules = [ (userModules.${user} or { }) ] ++ # user module
+                  optionals importDefault ([ (ezModules.default or { }) ] ++ # default module
+                    optionals isDarwin [ (ezModules.darwin or { }) ] ++ # default darwin module
+                    optionals isLinux [ (ezModules.linux or { }) ]); # default linux module
               };
             })
           allHosts)
       users;
+
+  readModules = dir:
+    if pathExists "${dir}.nix" && readFileType "${dir}.nix" == "regular" then
+      { default = dir; }
+    else if pathExists dir && readFileType dir == "directory" then
+      concatMapAttrs
+        (entry: type:
+          let
+            dirDefault = "${dir}/${entry}/default.nix";
+          in
+          if type == "regular" && hasSuffix ".nix" entry then
+            { ${removeSuffix ".nix" entry} = "${dir}/${entry}"; }
+          else if pathExists dirDefault && readFileType dirDefault == "regular" then
+            { ${entry} = dirDefault; }
+          else { }
+        )
+        (readDir dir)
+    else { }
+  ;
 
   hostOptions.options = {
     arch = mkOption {
@@ -212,13 +219,16 @@ in
     darwin = hostsOptions "darwin";
   };
 
-  config.flake = {
+  config.flake = rec {
+    homeModules = readModules cfg.hm.modulesDirectory;
+    nixosModules = readModules cfg.nixos.modulesDirectory;
+    darwinModules = readModules cfg.darwin.modulesDirectory;
+
     homeConfigurations = userConfigs
       {
-        inherit (cfg.hm)
-          modulesDirectory
-          usersDirectory
-          extraSpecialArgs;
+        userModules = readModules cfg.hm.usersDirectory;
+        ezModules = homeModules;
+        inherit (cfg.hm) extraSpecialArgs;
       }
       cfg.hm.users;
 
@@ -226,9 +236,9 @@ in
       {
         systemBuilder = nixosSystem;
         systemSuffix = "linux";
+        hostModules = readModules cfg.nixos.hostsDirectory;
+        ezModules = nixosModules;
         inherit (cfg.nixos)
-          modulesDirectory
-          hostsDirectory
           specialArgs;
       }
       cfg.nixos.hosts;
@@ -237,10 +247,9 @@ in
       {
         systemBuilder = darwinSystem;
         systemSuffix = "darwin";
-        inherit (cfg.darwin)
-          modulesDirectory
-          hostsDirectory
-          specialArgs;
+        hostModules = readModules cfg.darwin.hostsDirectory;
+        ezModules = darwinModules;
+        inherit (cfg.darwin) specialArgs;
       }
       cfg.darwin.hosts;
   };
