@@ -7,6 +7,9 @@
       inputs.nixpkgs.follows = "nixpkgs-darwin";
     };
     home-manager = {
+      # home-manager main branch is developed agains nixos-unstable,
+      # so if you want to use a different nixos branch,
+      # you need to use the appropriate home-manager branch.
       url = "github:nix-community/home-manager/release-23.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };

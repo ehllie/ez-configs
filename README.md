@@ -20,7 +20,25 @@ In case of home manager configurations, it also includes the `darwin` or `linux`
 
 ## Usage
 
-See the [example directory](https://github.com/ehllie/ez-configs/blob/main/example/flake.nix) for a documented example.
+To your flake inputs add:
+
+```nix
+ez-configs.url = "github:ehllie/ez-configs";
+```
+
+Inside your mkFlake add:
+
+```nix
+imports = [
+  inputs.ez-configs.flakeModule
+];
+
+ezConfigs.root = ./.;
+
+```
+
+I'd recommend also making all of this flake's inputs follow your own, since you might prefer using a stable release of nixos.
+See the [example directory](https://github.com/ehllie/ez-configs/blob/main/example/flake.nix) for a documented example on how to do that.
 I also use this module in my [own dotfiles](https://github.com/ehllie/dotfiles/blob/main/flake.nix).
 
 ## TODO
