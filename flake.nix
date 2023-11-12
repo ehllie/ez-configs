@@ -37,11 +37,6 @@
         inherit flakeModule;
       };
 
-      ezConfigs = {
-        root = ./example;
-        hm.users.example-user = { };
-        nixos.hosts.example-nixos.arch = "x86_64";
-        darwin.hosts.example-darwin.arch = "aarch64";
-      };
+      ezConfigs.root = ./example;
     };
 }

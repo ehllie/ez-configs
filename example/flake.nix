@@ -42,9 +42,6 @@
       ezConfigs = {
         root = ./.;
         globalArgs = { inherit inputs; };
-        hm.users.example-user = { };
-        nixos.hosts.example-nixos.arch = "x86_64";
-        darwin.hosts.example-darwin.arch = "aarch64";
       };
     };
 }
