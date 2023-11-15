@@ -35,6 +35,11 @@
 
       flake = {
         inherit flakeModule;
+
+        templates.default = {
+          path = ./example;
+          description = "A simple configuration template with ez-configs";
+        };
       };
 
       ezConfigs.root = ./example;
