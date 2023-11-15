@@ -7,4 +7,9 @@
       (pkgs.nerdfonts.override { fonts = [ "CascadiaCode" ]; })
     ];
   };
+
+  users.users.example-user = {
+    name = "example-user";
+    home = "/Users/example-user";
+  };
 }
