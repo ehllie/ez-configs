@@ -94,7 +94,7 @@ let
                     };
                   }
                 else
-                  throw "User ${user} not found inside ${cfg.hm.usersDirectory}"
+                  throw ''User ${user} not found inside homeConfigurations directory, but was added to ${name}.userHomeModules''
               );
           })
         ];
@@ -251,7 +251,7 @@ let
       type = types.bool;
       description = ''
         Whether to pass the osConfig argument to extraSpecialArgs.
-        This will be the nixosConfiguration or darwinConfiguration,
+        This will be the nixosConfiguration.config or darwinConfiguration.config,
         whose pkgs are being used to build this homeConfiguration.
       '';
     };
@@ -283,54 +283,100 @@ let
     };
   };
 
-  systemOptions = system: {
+
+  configurationOptions = configType: {
     modulesDirectory = mkOption {
-      default = "${cfg.root}/${system}-modules";
-      defaultText = literalExpression "\"\${ezConfigs.root}/${system}-modules\"";
+      default = "${cfg.root}/${configType}-modules";
+      defaultText = literalExpression "\"\${ezConfigs.root}/${configType}-modules\"";
       type = types.pathInStore;
       description = ''
-        The directory containing ${system}Modules.
+        The directory containing ${configType}Modules.
       '';
     };
 
-    hostsDirectory = mkOption {
-      default = "${cfg.root}/${system}-configurations";
-      defaultText = literalExpression "\"\${ezConfigs.root}/${system}-configurations\"";
+    configurationsDirectory = mkOption {
+      default = "${cfg.root}/${configType}-configurations";
+      defaultText = literalExpression "\"\${ezConfigs.root}/${configType}-configurations\"";
       type = types.pathInStore;
       description = ''
-        The directory containing ${system}Configurations.
+        The directory containing ${configType}Configurations.
       '';
     };
 
-    specialArgs = mkOption {
-      default = cfg.globalArgs;
-      defaultText = literalExpression "ezConfigs.globalArgs";
-      type = types.attrsOf types.anything;
-      description = ''
-        Extra arguments to pass to all ${system}Configurations.
-      '';
-    };
+  } // (
+    if configType == "home" then
+      {
+        extraSpecialArgs = mkOption {
+          default = cfg.globalArgs;
+          defaultText = literalExpression "ezConfigs.globalArgs";
+          type = types.attrsOf types.anything;
+          description = ''
+            Extra arguments to pass to all homeConfigurations.
+          '';
+        };
 
-    hosts = mkOption {
-      default = { };
-      type = types.attrsOf (types.submodule (hostOptions system));
-      example = literalExpression ''
-        {
-          hostA = {
-            userHomeModules = [ "bob" ];
-          };
+        users = mkOption {
+          default = { };
+          type = types.attrsOf (types.submodule userOptions);
 
-          hostB = {
-            importDefault = false;
-            arch = "aarch64
-          };
-        }
-      '';
-      description = ''
-        Settings for creating ${system}Configurations.
-      '';
-    };
-  };
+          example = literalExpression ''
+            {
+              alice = {
+                standalone = {
+                  enable = true;
+                  pkgs = import nixpkgs { system = "x86_64-linux"; };
+                };
+              };
+
+              bob = {
+                importDefault = false;
+              };
+            }
+          '';
+
+          description = ''
+            Settings for creating homeConfigurations.
+
+            It's not neccessary to specify this option to create flake outputs.
+            It's only needed if you want to change the defaults for specific homeConfigurations.
+          '';
+        };
+      }
+    else
+      {
+        specialArgs = mkOption {
+          default = cfg.globalArgs;
+          defaultText = literalExpression "ezConfigs.globalArgs";
+          type = types.attrsOf types.anything;
+          description = ''
+            Extra arguments to pass to all ${configType}Configurations.
+          '';
+        };
+
+        hosts = mkOption {
+          default = { };
+          type = types.attrsOf (types.submodule (hostOptions configType));
+          example = literalExpression ''
+            {
+              hostA = {
+                userHomeModules = [ "bob" ];
+              };
+
+              hostB = {
+                importDefault = false;
+                arch = "aarch64
+              };
+            }
+          '';
+          description = ''
+            Settings for creating ${configType}Configurations.
+
+            It's not neccessary to specify this option to create flake outputs.
+            It's only needed if you want to change the defaults for specific ${configType}Configurations.
+          '';
+        };
+      }
+  );
 
 in
 {
@@ -352,101 +398,50 @@ in
       '';
     };
 
-    hm = {
-      modulesDirectory = mkOption {
-        default = "${cfg.root}/home-modules";
-        defaultText = "\${ezConfigs.root}/home-modules";
-        type = types.pathInStore;
-        description = ''
-          The directory containing homeModules.
-        '';
-      };
+    home = configurationOptions "home";
 
-      configuratinsDirectory = mkOption {
-        default = "${cfg.root}/home-configurations";
-        defaultText = literalExpression "\"\${ezConfigs.root}/home-configurations\"";
-        type = types.pathInStore;
-        description = ''
-          The directory containing homeConfigurations.
-        '';
-      };
+    nixos = configurationOptions "nixos";
 
-      extraSpecialArgs = mkOption {
-        default = cfg.globalArgs;
-        defaultText = literalExpression "ezConfigs.globalArgs";
-        type = types.attrsOf types.anything;
-        description = ''
-          Extra arguments to pass to all homeConfigurations.
-        '';
-      };
-
-      users = mkOption {
-        default = { };
-        type = types.attrsOf (types.submodule userOptions);
-
-        example = literalExpression ''
-          {
-            alice = {
-              standalone = {
-                enable = true;
-                pkgs = import nixpkgs { system = "x86_64-linux"; };
-              };
-            };
-
-            bob = {
-              importDefault = false;
-            };
-          }
-        '';
-
-        description = ''
-          Settings for creating homeConfigurations.
-        '';
-      };
-    };
-
-    nixos = systemOptions "nixos";
-
-    darwin = systemOptions "darwin";
+    darwin = configurationOptions "darwin";
   };
 
   config.flake = mkIf (cfg ? root) rec {
-    homeModules = readModules cfg.hm.modulesDirectory;
+    homeModules = readModules cfg.home.modulesDirectory;
     nixosModules = readModules cfg.nixos.modulesDirectory;
     darwinModules = readModules cfg.darwin.modulesDirectory;
 
     homeConfigurations = userConfigs
       {
-        userModules = readModules cfg.hm.usersDirectory;
+        userModules = readModules cfg.home.configurationsDirectory;
         defaultUser = defaultSubmodule userOptions;
         ezModules = homeModules;
-        inherit (cfg.hm) extraSpecialArgs;
+        inherit (cfg.home) extraSpecialArgs;
       }
-      cfg.hm.users;
+      cfg.home.users;
 
     nixosConfigurations = systemsWith
       {
         os = "linux";
-        hostModules = readModules cfg.nixos.hostsDirectory;
-        defaultHost = defaultSubmoduleAttr ((systemOptions "nixos").hosts.type);
+        hostModules = readModules cfg.nixos.configurationsDirectory;
+        defaultHost = defaultSubmoduleAttr ((configurationOptions "nixos").hosts.type);
         ezModules = nixosModules;
-        userModules = readModules cfg.hm.usersDirectory;
+        userModules = readModules cfg.home.configurationsDirectory;
         ezHomeModules = homeModules;
         inherit (cfg.nixos) specialArgs;
-        inherit (cfg.hm) extraSpecialArgs users;
+        inherit (cfg.home) extraSpecialArgs users;
       }
       cfg.nixos.hosts;
 
     darwinConfigurations = systemsWith
       {
         os = "darwin";
-        hostModules = readModules cfg.darwin.hostsDirectory;
-        defaultHost = defaultSubmoduleAttr ((systemOptions "darwin").hosts.type);
+        hostModules = readModules cfg.darwin.configurationsDirectory;
+        defaultHost = defaultSubmoduleAttr ((configurationOptions "darwin").hosts.type);
         ezModules = darwinModules;
-        userModules = readModules cfg.hm.usersDirectory;
+        userModules = readModules cfg.home.configurationsDirectory;
         ezHomeModules = homeModules;
         inherit (cfg.darwin) specialArgs;
-        inherit (cfg.hm) extraSpecialArgs users;
+        inherit (cfg.home) extraSpecialArgs users;
       }
       cfg.darwin.hosts;
   };
