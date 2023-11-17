@@ -4,8 +4,6 @@ let
   inherit (builtins) pathExists readDir readFileType elemAt;
   inherit (lib) mkOption types optionals literalExpression mapAttrs concatMapAttrs genAttrs mkIf;
   inherit (lib.strings) hasSuffix removeSuffix;
-  # inherit (darwin.lib) darwinSystem;
-  # inherit (home-manager.lib) homeManagerConfiguration;
   cfg = config.ezConfigs;
 
 
@@ -218,13 +216,13 @@ let
         type = types.listOf types.str;
         description = ''
           List of users in ''${ezConfigs.hm.usersDirectory},
-          whose comfigurations to import as home manager ${system} modules.
+          whose comfigurations to import as home manager ${system}Modules.
+          They will be put inside `home-manager.''${user}.imports` list for this host.
 
           When this list is not empty, the `home-manager.extraSpecialArgs` option
           is also set to the one it would recieve in homeManagerConfigurations
           output, and the appropriate homeManager module is imported.
         '';
-
       };
     };
   };
@@ -285,22 +283,22 @@ let
     };
   };
 
-  hostsOptions = system: {
+  systemOptions = system: {
     modulesDirectory = mkOption {
-      default = "${cfg.root}/${system}";
-      defaultText = literalExpression "\"\${ezConfigs.root}/${system}\"";
+      default = "${cfg.root}/${system}-modules";
+      defaultText = literalExpression "\"\${ezConfigs.root}/${system}-modules\"";
       type = types.pathInStore;
       description = ''
-        The directory in which to look for ${system} modules.
+        The directory containing ${system}Modules.
       '';
     };
 
     hostsDirectory = mkOption {
-      default = "${cfg.root}/${system}-hosts";
-      defaultText = literalExpression "\"\${ezConfigs.root}/${system}-hosts\"";
+      default = "${cfg.root}/${system}-configurations";
+      defaultText = literalExpression "\"\${ezConfigs.root}/${system}-configurations\"";
       type = types.pathInStore;
       description = ''
-        The directory in which to look for host ${system} configurations.
+        The directory containing ${system}Configurations.
       '';
     };
 
@@ -309,7 +307,7 @@ let
       defaultText = literalExpression "ezConfigs.globalArgs";
       type = types.attrsOf types.anything;
       description = ''
-        Extra arguments to pass to all ${system} configurations.
+        Extra arguments to pass to all ${system}Configurations.
       '';
     };
 
@@ -318,12 +316,18 @@ let
       type = types.attrsOf (types.submodule (hostOptions system));
       example = literalExpression ''
         {
-          hostA.arch = "x86_64";
-          hostB.arch = "aarch64";
+          hostA = {
+            userHomeModules = [ "bob" ];
+          };
+
+          hostB = {
+            importDefault = false;
+            arch = "aarch64
+          };
         }
       '';
       description = ''
-        An attribute set of ${system} host definitions to create configurations for.
+        Settings for creating ${system}Configurations.
       '';
     };
   };
@@ -335,7 +339,7 @@ in
       type = types.pathInStore;
       example = literalExpression "./.";
       description = ''
-        The root from which configuration modules should be searched.
+        The root from which configurations and modules should be searched.
       '';
     };
 
@@ -344,26 +348,26 @@ in
       example = literalExpression "{ inherit inputs; }";
       type = types.attrsOf types.anything;
       description = ''
-        Extra arguments to pass to all systems.
+        Extra arguments to pass to all configurations.
       '';
     };
 
     hm = {
       modulesDirectory = mkOption {
-        default = "${cfg.root}/home";
-        defaultText = "\${ezConfigs.root}/home";
+        default = "${cfg.root}/home-modules";
+        defaultText = "\${ezConfigs.root}/home-modules";
         type = types.pathInStore;
         description = ''
-          The directory in which to look for home-manager configurations.
+          The directory containing homeModules.
         '';
       };
 
-      usersDirectory = mkOption {
-        default = "${cfg.root}/users";
-        defaultText = literalExpression "\"\${ezConfigs.root}/users\"";
+      configuratinsDirectory = mkOption {
+        default = "${cfg.root}/home-configurations";
+        defaultText = literalExpression "\"\${ezConfigs.root}/home-configurations\"";
         type = types.pathInStore;
         description = ''
-          The directory in which to look for user specific home-manager configurations.
+          The directory containing homeConfigurations.
         '';
       };
 
@@ -372,7 +376,7 @@ in
         defaultText = literalExpression "ezConfigs.globalArgs";
         type = types.attrsOf types.anything;
         description = ''
-          Extra arguments to pass to all home-manager configurations.
+          Extra arguments to pass to all homeConfigurations.
         '';
       };
 
@@ -382,20 +386,28 @@ in
 
         example = literalExpression ''
           {
-            alice = { };
-            bob = { };
+            alice = {
+              standalone = {
+                enable = true;
+                pkgs = import nixpkgs { system = "x86_64-linux"; };
+              };
+            };
+
+            bob = {
+              importDefault = false;
+            };
           }
         '';
 
         description = ''
-          A list of user definitions to create home manager configurations for.
+          Settings for creating homeConfigurations.
         '';
       };
     };
 
-    nixos = hostsOptions "nixos";
+    nixos = systemOptions "nixos";
 
-    darwin = hostsOptions "darwin";
+    darwin = systemOptions "darwin";
   };
 
   config.flake = mkIf (cfg ? root) rec {
@@ -416,7 +428,7 @@ in
       {
         os = "linux";
         hostModules = readModules cfg.nixos.hostsDirectory;
-        defaultHost = defaultSubmoduleAttr ((hostsOptions "nixos").hosts.type);
+        defaultHost = defaultSubmoduleAttr ((systemOptions "nixos").hosts.type);
         ezModules = nixosModules;
         userModules = readModules cfg.hm.usersDirectory;
         ezHomeModules = homeModules;
@@ -429,7 +441,7 @@ in
       {
         os = "darwin";
         hostModules = readModules cfg.darwin.hostsDirectory;
-        defaultHost = defaultSubmoduleAttr ((hostsOptions "darwin").hosts.type);
+        defaultHost = defaultSubmoduleAttr ((systemOptions "darwin").hosts.type);
         ezModules = darwinModules;
         userModules = readModules cfg.hm.usersDirectory;
         ezHomeModules = homeModules;

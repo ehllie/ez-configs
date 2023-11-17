@@ -1,18 +1,22 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
-    nixpkgs-darwin.url = "github:NixOS/nixpkgs/nixpkgs-23.05-darwin";
-    darwin = {
-      url = "github:lnl7/nix-darwin/master";
-      inputs.nixpkgs.follows = "nixpkgs-darwin";
-    };
-    home-manager = {
-      # home-manager main branch is developed agains nixos-unstable,
-      # so if you want to use a different nixos branch,
-      # you need to use the appropriate home-manager branch.
-      url = "github:nix-community/home-manager/release-23.05";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+
+    # If you're going to use darwinConfigurations uncomment next two inputs
+    # Otherwise you can remove them
+    # nixpkgs-darwin.url = "github:NixOS/nixpkgs/nixpkgs-23.05-darwin";
+    # darwin = {
+    #   url = "github:lnl7/nix-darwin/master";
+    #   inputs.nixpkgs.follows = "nixpkgs-darwin";
+    # };
+
+    # If you're going to use homeConfigurations uncomment next input
+    # Otherwise you can remove it
+    # home-manager = {
+    #   url = "github:nix-community/home-manager/release-23.05";
+    #   inputs.nixpkgs.follows = "nixpkgs";
+    # };
+
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
@@ -38,6 +42,9 @@
       systems = [ ];
 
       ezConfigs = {
+        # All subdirectories under this contain a `dummy` file.
+        # They can be deleted after the template has been initialised.
+        # They are only there to preserve the directory structure within git.
         root = ./.;
         globalArgs = { inherit inputs; };
       };

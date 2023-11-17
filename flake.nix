@@ -15,7 +15,7 @@
       flake = {
         flakeModule = ./flake-module.nix;
         templates.default = {
-          path = ./example;
+          path = ./template;
           description = "A simple configuration template with ez-configs";
         };
       };
