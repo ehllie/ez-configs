@@ -19,14 +19,9 @@
     };
     ez-configs = {
       url = "github:ehllie/ez-configs";
-      # We want to override the inputs of ez-configs
-      # That way you're able to update your system packages when running `nix flake update`
       inputs = {
         nixpkgs.follows = "nixpkgs";
-        nixpkgs-darwin.follows = "nixpkgs-darwin";
         flake-parts.follows = "flake-parts";
-        darwin.follows = "darwin";
-        home-manager.follows = "home-manager";
       };
     };
   };

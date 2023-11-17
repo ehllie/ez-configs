@@ -1,11 +1,11 @@
-{ darwin, home-manager, nixpkgs, ... }: { lib, config, ... }:
+{ inputs, lib, config, ... }:
 let
 
   inherit (builtins) pathExists readDir readFileType elemAt;
-  inherit (nixpkgs.lib) mkOption types nixosSystem optionals literalExpression mapAttrs concatMapAttrs genAttrs;
-  inherit (nixpkgs.lib.strings) hasSuffix removeSuffix;
-  inherit (darwin.lib) darwinSystem;
-  inherit (home-manager.lib) homeManagerConfiguration;
+  inherit (lib) mkOption types optionals literalExpression mapAttrs concatMapAttrs genAttrs mkIf;
+  inherit (lib.strings) hasSuffix removeSuffix;
+  # inherit (darwin.lib) darwinSystem;
+  # inherit (home-manager.lib) homeManagerConfiguration;
   cfg = config.ezConfigs;
 
 
@@ -21,13 +21,11 @@ let
 
   # Creates an attrset of nixosConfigurations or darwinConfigurations.
   systemsWith =
-    { systemBuilder
-    , systemSuffix
+    { os
     , ezModules
     , hostModules
     , specialArgs
     , defaultHost
-    , hmModule
     , extraSpecialArgs
     , userModules
     , ezHomeModules
@@ -38,10 +36,44 @@ let
       let
         hostSettings = hosts.${name} or defaultHost;
         inherit (hostSettings) arch importDefault userHomeModules;
+        hmModule =
+          if inputs ? home-manager then
+            (
+              if os == "linux"
+              then inputs.home-manager.nixosModules.default
+              else inputs.home-manager.darwinModules.default
+            )
+          else
+            throw ''
+              home-manager input not found, but host ${name} was configured with `userHomeModules`.
+              Please add a home-manager input to your flake.
+            '';
+        systemBuilder =
+          if os == "linux" then
+            (
+              if inputs ? nixpkgs
+              then inputs.nixpkgs.lib.nixosSystem
+              else
+                throw ''
+                  nixpkgs input not found, but host ${name} present in nixosConfigurations directory.
+                  Please add a nixpkgs input to your flake.
+                ''
+            )
+          else
+            (if inputs ? darwin
+            then inputs.darwin.lib.darwinSystem
+            else if inputs ? nix-darwin
+            then inputs.nix-darwin.lib.darwinSystem
+            else
+              throw ''
+                darwin or nix-darwin input not found, but host ${name} present in darwinConfigurations directory.
+                Please add a darwin or nix-darwin input to your flake.
+              ''
+            );
       in
       systemBuilder {
         specialArgs = specialArgs // { inherit ezModules; };
-        system = "${arch}-${systemSuffix}";
+        system = "${arch}-${os}";
         modules = [ configModule ]
           ++ optionals importDefault [ (ezModules.default or { }) ]
           ++ optionals (userHomeModules != [ ]) [
@@ -91,21 +123,26 @@ let
             then host: "${user}@${host}"
             else nameFunction;
           modules = stdenv: userImports { inherit stdenv importDefault user ezModules userModules; };
+          homeManagerConfiguration =
+            if inputs ? home-manager
+            then inputs.home-manager.lib.homeManagerConfiguration
+            else
+              throw ''
+                home-manager input not found, but user ${user} present in homeConfigurations directory.
+                Please add a home-manager input to your flake.
+              '';
         in
         if standalone.enable
         then
-          let
-            pkgs = import nixpkgs { inherit (standalone) system; };
-          in
           {
             ${user} = homeManagerConfiguration {
-              inherit pkgs;
+              inherit (standalone) pkgs;
               extraSpecialArgs = extraSpecialArgs //
                 { inherit ezModules; } //
                 # We still want to pass in osConfig even when there is none,
                 # so that modules evaluate properly when using that argument
                 (if passInOsConfig then { osConfig = { }; } else { });
-              modules = modules pkgs.stdenv;
+              modules = modules standalone.pkgs.stdenv;
             };
           }
         else
@@ -236,14 +273,13 @@ let
         '';
       };
 
-      system = mkOption {
-        type = types.str;
+      pkgs = mkOption {
+        type = types.pkgs;
+        example = literalExpression "import nixpkgs {system = \"x86_64-linux\"}";
         description = ''
-          The system with which to create the pkgs set for the configuration.
+          The package set with which to construct the homeManagerConfiguration.
 
-          homeManagerConfiguration function requires a `pkgs` argument,
-          and this is the system that will be passed to the `import nixpkgs { inherit system; }`
-          call.
+          Non standalone user configurations will use the package set of the host system.
         '';
       };
     };
@@ -362,7 +398,7 @@ in
     darwin = hostsOptions "darwin";
   };
 
-  config.flake = rec {
+  config.flake = mkIf (cfg ? root) rec {
     homeModules = readModules cfg.hm.modulesDirectory;
     nixosModules = readModules cfg.nixos.modulesDirectory;
     darwinModules = readModules cfg.darwin.modulesDirectory;
@@ -378,12 +414,10 @@ in
 
     nixosConfigurations = systemsWith
       {
-        systemBuilder = nixosSystem;
-        systemSuffix = "linux";
+        os = "linux";
         hostModules = readModules cfg.nixos.hostsDirectory;
         defaultHost = defaultSubmoduleAttr ((hostsOptions "nixos").hosts.type);
         ezModules = nixosModules;
-        hmModule = home-manager.nixosModules.default;
         userModules = readModules cfg.hm.usersDirectory;
         ezHomeModules = homeModules;
         inherit (cfg.nixos) specialArgs;
@@ -393,12 +427,10 @@ in
 
     darwinConfigurations = systemsWith
       {
-        systemBuilder = darwinSystem;
-        systemSuffix = "darwin";
+        os = "darwin";
         hostModules = readModules cfg.darwin.hostsDirectory;
         defaultHost = defaultSubmoduleAttr ((hostsOptions "darwin").hosts.type);
         ezModules = darwinModules;
-        hmModule = home-manager.darwinModules.default;
         userModules = readModules cfg.hm.usersDirectory;
         ezHomeModules = homeModules;
         inherit (cfg.darwin) specialArgs;
