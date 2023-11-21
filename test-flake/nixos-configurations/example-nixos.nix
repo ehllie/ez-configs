@@ -20,4 +20,6 @@
     extraGroups = [ "wheel" ];
     initialPassword = "password"; # Change this asap obv
   };
+
+  nixpkgs.hostPlatform = "x86_64-linux";
 }

@@ -33,7 +33,7 @@ let
       (name: configModule:
       let
         hostSettings = hosts.${name} or defaultHost;
-        inherit (hostSettings) arch importDefault userHomeModules;
+        inherit (hostSettings) importDefault userHomeModules;
         hmModule =
           if inputs ? home-manager then
             (
@@ -71,7 +71,6 @@ let
       in
       systemBuilder {
         specialArgs = specialArgs // { inherit ezModules; };
-        system = "${arch}-${os}";
         modules = [ configModule ]
           ++ optionals importDefault [ (ezModules.default or { }) ]
           ++ optionals (userHomeModules != [ ]) [
@@ -197,12 +196,6 @@ let
 
   hostOptions = system: {
     options = {
-      arch = mkOption {
-        type = types.enum [ "x86_64" "aarch64" ];
-        default = if system == "darwin" then "aarch64" else "x86_64";
-        description = "The architecture of the system.";
-      };
-
       importDefault = mkOption {
         default = true;
         type = types.bool;

@@ -12,4 +12,6 @@
     name = "example-user";
     home = "/Users/example-user";
   };
+
+  nixpkgs.hostPlatform = "aarch64-darwin";
 }
