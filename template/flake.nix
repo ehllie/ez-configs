@@ -42,9 +42,6 @@
       systems = [ ];
 
       ezConfigs = {
-        # All subdirectories under this contain a `dummy` file.
-        # They can be deleted after the template has been initialised.
-        # They are only there to preserve the directory structure within git.
         root = ./.;
         globalArgs = { inherit inputs; };
       };

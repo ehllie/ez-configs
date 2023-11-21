@@ -279,7 +279,7 @@ let
 
   configurationOptions = configType: {
     modulesDirectory = mkOption {
-      default = "${cfg.root}/${configType}-modules";
+      default = if cfg.root != null then "${cfg.root}/${configType}-modules" else ./unset-directory;
       defaultText = literalExpression "\"\${ezConfigs.root}/${configType}-modules\"";
       type = types.pathInStore;
       description = ''
@@ -288,7 +288,7 @@ let
     };
 
     configurationsDirectory = mkOption {
-      default = "${cfg.root}/${configType}-configurations";
+      default = if cfg.root != null then "${cfg.root}/${configType}-configurations" else ./unset-directory;
       defaultText = literalExpression "\"\${ezConfigs.root}/${configType}-configurations\"";
       type = types.pathInStore;
       description = ''
@@ -375,7 +375,8 @@ in
 {
   options.ezConfigs = {
     root = mkOption {
-      type = types.pathInStore;
+      default = null;
+      type = types.nullOr types.pathInStore;
       example = literalExpression "./.";
       description = ''
         The root from which configurations and modules should be searched.
@@ -398,7 +399,7 @@ in
     darwin = configurationOptions "darwin";
   };
 
-  config.flake = mkIf (cfg ? root) rec {
+  config.flake = rec {
     homeModules = readModules cfg.home.modulesDirectory;
     nixosModules = readModules cfg.nixos.modulesDirectory;
     darwinModules = readModules cfg.darwin.modulesDirectory;
