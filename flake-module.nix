@@ -71,8 +71,10 @@ let
       in
       systemBuilder {
         specialArgs = specialArgs // { inherit ezModules; };
-        modules = [ configModule ]
-          ++ optionals importDefault [ (ezModules.default or { }) ]
+        modules = [
+          configModule
+          { networking.hostName = lib.mkDefault "${name}"; }
+          ] ++ optionals importDefault [ (ezModules.default or { }) ]
           ++ optionals (userHomeModules != [ ]) [
           hmModule
           { home-manager.extraSpecialArgs = extraSpecialArgs // { ezModules = ezHomeModules; }; }
