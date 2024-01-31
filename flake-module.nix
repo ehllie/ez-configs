@@ -46,19 +46,19 @@ let
               home-manager input not found, but host ${name} was configured with `userHomeModules`.
               Please add a home-manager input to your flake.
             '';
-        systemBuilder =
-          if os == "linux" then
-            (
-              if inputs ? nixpkgs
-              then inputs.nixpkgs.lib.nixosSystem
-              else
-                throw ''
-                  nixpkgs input not found, but host ${name} present in nixosConfigurations directory.
-                  Please add a nixpkgs input to your flake.
-                ''
-            )
-          else
-            (if inputs ? darwin
+        systemBuilder = if (hostSettings.builder != null) then hostSettings.builder else {
+          linux =
+
+            if inputs ? nixpkgs
+            then inputs.nixpkgs.lib.nixosSystem
+            else
+              throw ''
+                nixpkgs input not found, but host ${name} present in nixosConfigurations directory.
+                Please add a nixpkgs input to your flake.
+              '';
+
+          darwin =
+            if inputs ? darwin
             then inputs.darwin.lib.darwinSystem
             else if inputs ? nix-darwin
             then inputs.nix-darwin.lib.darwinSystem
@@ -66,16 +66,16 @@ let
               throw ''
                 darwin or nix-darwin input not found, but host ${name} present in darwinConfigurations directory.
                 Please add a darwin or nix-darwin input to your flake.
-              ''
-            );
+              '';
+        }.${os};
       in
       systemBuilder {
         specialArgs = specialArgs // { inherit ezModules; };
         modules = [
           configModule
           { networking.hostName = lib.mkDefault "${name}"; }
-          ] ++ optionals importDefault [ (ezModules.default or { }) ]
-          ++ optionals (userHomeModules != [ ]) [
+        ] ++ optionals importDefault [ (ezModules.default or { }) ]
+        ++ optionals (userHomeModules != [ ]) [
           hmModule
           { home-manager.extraSpecialArgs = extraSpecialArgs // { ezModules = ezHomeModules; }; }
           ({ pkgs, ... }: {
@@ -217,6 +217,18 @@ let
           When this list is not empty, the `home-manager.extraSpecialArgs` option
           is also set to the one it would recieve in homeManagerConfigurations
           output, and the appropriate homeManager module is imported.
+        '';
+      };
+
+      builder = mkOption {
+        default = null;
+        type = types.lazyAttrsOf types.raw;
+        example = literalExpression "inputs.nixpkgs.lib.nixosSystem";
+        description = ''
+          Function used to build this host.
+
+          When this option is null, the builder will be automatically decided
+          using the `nixpkgs` and `nix-darwin` inputs of your flake.
         '';
       };
     };
