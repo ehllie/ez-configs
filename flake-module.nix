@@ -2,7 +2,7 @@
 let
 
   inherit (builtins) pathExists readDir readFileType elemAt;
-  inherit (lib) mkOption types optionals literalExpression mapAttrs concatMapAttrs genAttrs mkIf;
+  inherit (lib) mkOption types optionals literalExpression mapAttrs concatMapAttrs genAttrs;
   inherit (lib.strings) hasSuffix removeSuffix;
   cfg = config.ezConfigs;
 
@@ -103,8 +103,8 @@ let
       hostModules;
 
   allHosts =
-    (config.flake.nixosConfigurations //
-      config.flake.darwinConfigurations);
+    config.flake.nixosConfigurations //
+    config.flake.darwinConfigurations;
 
   # Creates an attrset of home manager confgurations for each user on each host.
   userConfigs = { ezModules, userModules, extraSpecialArgs, defaultUser }: users:
@@ -431,7 +431,7 @@ in
       {
         os = "linux";
         hostModules = readModules cfg.nixos.configurationsDirectory;
-        defaultHost = defaultSubmoduleAttr ((configurationOptions "nixos").hosts.type);
+        defaultHost = defaultSubmoduleAttr (configurationOptions "nixos").hosts.type;
         ezModules = nixosModules;
         userModules = readModules cfg.home.configurationsDirectory;
         ezHomeModules = homeModules;
@@ -444,7 +444,7 @@ in
       {
         os = "darwin";
         hostModules = readModules cfg.darwin.configurationsDirectory;
-        defaultHost = defaultSubmoduleAttr ((configurationOptions "darwin").hosts.type);
+        defaultHost = defaultSubmoduleAttr (configurationOptions "darwin").hosts.type;
         ezModules = darwinModules;
         userModules = readModules cfg.home.configurationsDirectory;
         ezHomeModules = homeModules;
