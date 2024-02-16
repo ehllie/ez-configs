@@ -172,7 +172,10 @@ let
             { ${removeSuffix ".nix" entry} = "${dir}/${entry}"; }
           else if pathExists dirDefault && readFileType dirDefault == "regular" then
             { ${entry} = dirDefault; }
-          else { }
+          else if type == "directory" then
+            { ${entry} = readModules "${dir}/${entry}"; }
+          else
+            { }
         )
         (readDir dir)
     else { }
