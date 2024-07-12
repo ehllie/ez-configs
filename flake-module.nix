@@ -283,7 +283,7 @@ let
     modulesDirectory = mkOption {
       default = if cfg.root != null then "${cfg.root}/${configType}-modules" else ./unset-directory;
       defaultText = literalExpression "\"\${ezConfigs.root}/${configType}-modules\"";
-      type = types.pathInStore;
+      type = types.path;
       description = ''
         The directory containing ${configType}Modules.
       '';
@@ -292,7 +292,7 @@ let
     configurationsDirectory = mkOption {
       default = if cfg.root != null then "${cfg.root}/${configType}-configurations" else ./unset-directory;
       defaultText = literalExpression "\"\${ezConfigs.root}/${configType}-configurations\"";
-      type = types.pathInStore;
+      type = types.path;
       description = ''
         The directory containing ${configType}Configurations.
       '';
@@ -378,7 +378,7 @@ in
   options.ezConfigs = {
     root = mkOption {
       default = null;
-      type = types.nullOr types.pathInStore;
+      type = types.nullOr types.path;
       example = literalExpression "./.";
       description = ''
         The root from which configurations and modules should be searched.
