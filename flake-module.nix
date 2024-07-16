@@ -11,11 +11,52 @@ let
   # Creates a list of imports to include for a given user.
   # This is used in both systemsWith and userConfigs,
   # so it's convinient to have it exported as a top level function
-  userImports = { stdenv, userModules, ezModules, user, importDefault }:
+  userImports = { os, userModules, ezModules, user, importDefault }:
     [ (userModules.${user} or { }) ] ++ # user module
-    optionals importDefault ([ (ezModules.default or { }) ] ++ # default module
-    optionals stdenv.isDarwin [ (ezModules.darwin or { }) ] ++ # default darwin module
-    optionals stdenv.isLinux [ (ezModules.linux or { }) ]); # default linux module;
+    optionals importDefault (
+      [ (ezModules.default or { }) ] ++ # default module
+      (if os == "linux" 
+        then [ (ezModules.linux or { }) ] # default linux module;
+        else [ (ezModules.darwin or { }) ] # default darwin module
+      )
+    );
+
+  importUserModule = (
+    { user, users, extraSpecialArgs, os, userModules, ezHomeModules, errorMsg, ... }:
+    let
+      hmModule =
+        if inputs ? home-manager then
+          (
+            if os == "linux"
+            then inputs.home-manager.nixosModules.default
+            else inputs.home-manager.darwinModules.default
+          )
+        else
+          throw ''
+            home-manager input not found, but ${errorMsg}`.
+            Please add a home-manager input to your flake.
+          '';
+    in {
+      imports = [
+        hmModule
+        { home-manager.extraSpecialArgs = extraSpecialArgs // { ezModules = ezHomeModules; }; }
+      ];
+
+      home-manager.users."${user}" =
+        if userModules ? ${user} then
+          let
+            userSettings = users.${user} or (defaultSubmodule userOptions);
+          in
+          {
+            imports = userImports {
+              inherit (userSettings) importDefault;
+              inherit os user userModules;
+              ezModules = ezHomeModules;
+            };
+          }
+        else
+          throw ''User ${user} not found inside homeConfigurations directory, but ${errorMsg}'';
+      });
 
   # Creates an attrset of nixosConfigurations or darwinConfigurations.
   systemsWith =
@@ -27,6 +68,7 @@ let
     , extraSpecialArgs
     , userModules
     , ezHomeModules
+    , ezLib
     , users
     }: hosts:
     mapAttrs
@@ -34,18 +76,6 @@ let
       let
         hostSettings = hosts.${name} or defaultHost;
         inherit (hostSettings) importDefault userHomeModules;
-        hmModule =
-          if inputs ? home-manager then
-            (
-              if os == "linux"
-              then inputs.home-manager.nixosModules.default
-              else inputs.home-manager.darwinModules.default
-            )
-          else
-            throw ''
-              home-manager input not found, but host ${name} was configured with `userHomeModules`.
-              Please add a home-manager input to your flake.
-            '';
         systemBuilder =
           if os == "linux" then
             (
@@ -70,35 +100,16 @@ let
             );
       in
       systemBuilder {
-        specialArgs = specialArgs // { inherit ezModules; };
+        specialArgs = specialArgs // { inherit ezModules ezLib; };
         modules = [
           configModule
           { networking.hostName = lib.mkDefault "${name}"; }
           ] ++ optionals importDefault [ (ezModules.default or { }) ]
-          ++ optionals (userHomeModules != [ ]) [
-          hmModule
-          { home-manager.extraSpecialArgs = extraSpecialArgs // { ezModules = ezHomeModules; }; }
-          ({ pkgs, ... }: {
-            home-manager.users = genAttrs
-              userHomeModules
-              (user:
-                if userModules ? ${user} then
-                  let
-                    userSettings = users.${user} or (defaultSubmodule userOptions);
-                  in
-                  {
-                    imports = userImports {
-                      inherit (pkgs) stdenv;
-                      inherit (userSettings) importDefault;
-                      inherit user userModules;
-                      ezModules = ezHomeModules;
-                    };
-                  }
-                else
-                  throw ''User ${user} not found inside homeConfigurations directory, but was added to ${name}.userHomeModules''
-              );
-          })
-        ];
+          ++ map (
+               importUserModule { 
+                 inherit extraSpecialArgs os users userModules ezHomeModules userHomeModules;
+                 errorMsg = "needed by ${name}.userHomeModules}";
+              }) userHomeModules;
       })
       hostModules;
 
@@ -121,7 +132,12 @@ let
             if nameFunction == null
             then host: "${user}@${host}"
             else nameFunction;
-          modules = stdenv: userImports { inherit stdenv importDefault user ezModules userModules; };
+          modules = stdenv: let
+            os =
+              if stdenv.isLinux 
+              then "linux"
+              else "darwin";
+          in userImports { inherit importDefault user ezModules userModules os; };
           homeManagerConfiguration =
             if inputs ? home-manager
             then inputs.home-manager.lib.homeManagerConfiguration
@@ -406,6 +422,32 @@ in
     nixosModules = readModules cfg.nixos.modulesDirectory;
     darwinModules = readModules cfg.darwin.modulesDirectory;
 
+    ezLib = {
+      nixosImportUserModule = (user: importUserModule
+      {
+        inherit user;
+        os = "linux";
+        ezModules = nixosModules;
+        userModules = readModules cfg.home.configurationsDirectory;
+        ezHomeModules = homeModules;
+        inherit (cfg.nixos) specialArgs;
+        inherit (cfg.home) extraSpecialArgs users;
+        errorMsg = "needed due to usage of ezLib.nixosImportUserModule";
+      });
+
+      darwinImportUserModule = (user: importUserModule
+      {
+        inherit user;
+        os = "darwin";
+        ezModules = darwinModules;
+        userModules = readModules cfg.home.configurationsDirectory;
+        ezHomeModules = homeModules;
+        inherit (cfg.darwin) specialArgs;
+        inherit (cfg.home) extraSpecialArgs users;
+        errorMsg = "needed due to usage of ezLib.darwinImportUserModule";
+      });
+    };
+
     homeConfigurations = userConfigs
       {
         userModules = readModules cfg.home.configurationsDirectory;
@@ -425,6 +467,7 @@ in
         ezHomeModules = homeModules;
         inherit (cfg.nixos) specialArgs;
         inherit (cfg.home) extraSpecialArgs users;
+        inherit ezLib;
       }
       cfg.nixos.hosts;
 
@@ -438,6 +481,7 @@ in
         ezHomeModules = homeModules;
         inherit (cfg.darwin) specialArgs;
         inherit (cfg.home) extraSpecialArgs users;
+        inherit ezLib;
       }
       cfg.darwin.hosts;
   };
