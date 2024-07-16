@@ -159,14 +159,14 @@ let
       )
       userModules;
 
-  readModules = dir:
+  readModules = { dir, entryPoint ? "default.nix" }:
     if pathExists "${dir}.nix" && readFileType "${dir}.nix" == "regular" then
       { default = dir; }
     else if pathExists dir && readFileType dir == "directory" then
       concatMapAttrs
         (entry: type:
           let
-            dirDefault = "${dir}/${entry}/default.nix";
+            dirDefault = "${dir}/${entry}/${entryPoint}";
           in
           if type == "regular" && hasSuffix ".nix" entry then
             { ${removeSuffix ".nix" entry} = "${dir}/${entry}"; }
@@ -298,6 +298,17 @@ let
       '';
     };
 
+    configurationEntryPoint = mkOption {
+      default = "default.nix";
+      defaultText = literalExpression "\"default.nix\"";
+      type = types.str;
+      description = ''
+        Entry point file for ${configType}Configurations.
+      '';
+    };
+
+
+
   } // (
     if configType == "home" then
       {
@@ -402,13 +413,13 @@ in
   };
 
   config.flake = rec {
-    homeModules = readModules cfg.home.modulesDirectory;
-    nixosModules = readModules cfg.nixos.modulesDirectory;
-    darwinModules = readModules cfg.darwin.modulesDirectory;
+    homeModules = readModules { dir=cfg.home.modulesDirectory; };
+    nixosModules = readModules { dir=cfg.nixos.modulesDirectory; };
+    darwinModules = readModules { dir=cfg.darwin.modulesDirectory; };
 
     homeConfigurations = userConfigs
       {
-        userModules = readModules cfg.home.configurationsDirectory;
+        userModules = readModules { dir=cfg.home.configurationsDirectory; entryPoint=cfg.home.configurationEntryPoint; };
         defaultUser = defaultSubmodule userOptions;
         ezModules = homeModules;
         inherit (cfg.home) extraSpecialArgs;
@@ -418,10 +429,10 @@ in
     nixosConfigurations = systemsWith
       {
         os = "linux";
-        hostModules = readModules cfg.nixos.configurationsDirectory;
+        hostModules = readModules { dir=cfg.nixos.configurationsDirectory; entryPoint=cfg.nixos.configurationEntryPoint; };
         defaultHost = defaultSubmoduleAttr ((configurationOptions "nixos").hosts.type);
         ezModules = nixosModules;
-        userModules = readModules cfg.home.configurationsDirectory;
+        userModules = readModules { dir=cfg.home.configurationsDirectory; entryPoint=cfg.home.configurationEntryPoint; };
         ezHomeModules = homeModules;
         inherit (cfg.nixos) specialArgs;
         inherit (cfg.home) extraSpecialArgs users;
@@ -431,10 +442,10 @@ in
     darwinConfigurations = systemsWith
       {
         os = "darwin";
-        hostModules = readModules cfg.darwin.configurationsDirectory;
+        hostModules = readModules { dir=cfg.darwin.configurationsDirectory; entryPoint=cfg.darwin.configurationEntryPoint; };
         defaultHost = defaultSubmoduleAttr ((configurationOptions "darwin").hosts.type);
         ezModules = darwinModules;
-        userModules = readModules cfg.home.configurationsDirectory;
+        userModules = readModules { dir=cfg.home.configurationsDirectory; entryPoint=cfg.home.configurationEntryPoint; };
         ezHomeModules = homeModules;
         inherit (cfg.darwin) specialArgs;
         inherit (cfg.home) extraSpecialArgs users;
