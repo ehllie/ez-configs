@@ -1,4 +1,5 @@
 # This is the module that will be imported with the `nixosConfigurations.example-nixos` system
+{ config, ... }:
 {
   fileSystems = {
     "/" = {
@@ -13,10 +14,11 @@
   };
   swapDevices = [{ device = "/dev/vg1/swap"; }];
 
-  users.users.example-user = {
+  users.users.system-user = rec {
+    name = "alice";
     isNormalUser = true;
-    home = "/home/example-user";
-    description = "Example User";
+    home = "/home/${name}";
+    description = "System User";
     extraGroups = [ "wheel" ];
     initialPassword = "password"; # Change this asap obv
   };
