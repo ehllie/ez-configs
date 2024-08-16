@@ -1,8 +1,8 @@
 { inputs, lib, config, ... }:
 let
 
-  inherit (builtins) pathExists readDir readFileType elemAt;
-  inherit (lib) mkOption types optionals literalExpression mapAttrs concatMapAttrs genAttrs mkIf;
+  inherit (builtins) pathExists readDir readFileType elemAt isList;
+  inherit (lib) mkOption types optionals literalExpression mapAttrs concatMapAttrs genAttrs id;
   inherit (lib.strings) hasSuffix removeSuffix;
   cfg = config.ezConfigs;
 
@@ -33,7 +33,12 @@ let
       (name: configModule:
       let
         hostSettings = hosts.${name} or defaultHost;
-        inherit (hostSettings) importDefault userHomeModules;
+        inherit (hostSettings) importDefault;
+        # Convert a list of strings into an attribute set with identical names and values.
+        userHomeModules =
+          if isList hostSettings.userHomeModules
+          then genAttrs hostSettings.userHomeModules id
+          else hostSettings.userHomeModules;
         hmModule =
           if inputs ? home-manager then
             (
@@ -75,28 +80,30 @@ let
           configModule
           { networking.hostName = lib.mkDefault "${name}"; }
         ] ++ optionals importDefault [ (ezModules.default or { }) ]
-        ++ optionals (userHomeModules != [ ]) [
+        ++ optionals (userHomeModules != { }) [
           hmModule
-          { home-manager.extraSpecialArgs = extraSpecialArgs // { ezModules = ezHomeModules; }; }
           ({ pkgs, ... }: {
-            home-manager.users = genAttrs
-              userHomeModules
-              (user:
-                if userModules ? ${user} then
-                  let
-                    userSettings = users.${user} or (defaultSubmodule userOptions);
-                  in
-                  {
-                    imports = userImports {
-                      inherit (pkgs) stdenv;
-                      inherit (userSettings) importDefault;
-                      inherit user userModules;
-                      ezModules = ezHomeModules;
-                    };
-                  }
-                else
-                  throw ''User ${user} not found inside homeConfigurations directory, but was added to ${name}.userHomeModules''
-              );
+            home-manager = {
+              extraSpecialArgs = extraSpecialArgs // { ezModules = ezHomeModules; };
+              users = mapAttrs
+                (_: user:
+                  if userModules ? ${user} then
+                    let
+                      userSettings = users.${user} or (defaultSubmodule userOptions);
+                    in
+                    {
+                      imports = userImports {
+                        inherit (pkgs) stdenv;
+                        inherit (userSettings) importDefault;
+                        inherit user userModules;
+                        ezModules = ezHomeModules;
+                      };
+                    }
+                  else
+                    throw ''User ${user} not found inside homeConfigurations directory, but was added to ${name}.userHomeModules''
+                )
+                userHomeModules;
+            };
           })
         ];
       })
@@ -230,13 +237,22 @@ let
 
       userHomeModules = mkOption {
         default = [ ];
-        type = types.listOf types.str;
+        type = types.either (types.listOf types.str) (types.attrsOf types.str);
+        example = literalExpression ''
+          { 
+            alice = "alice-minimal";
+            bob = "bob-full";
+          }
+        '';
         description = ''
-          List of users in ''${ezConfigs.hm.usersDirectory},
+          List or attribute set of users in ''${ezConfigs.hm.usersDirectory},
           whose comfigurations to import as home manager ${system}Modules.
+          If it's a list, each user is assumed to have the same name as the homeModule.
+          You can override this by using an attribute set, where the attribute name
+          is the name of the host user, while value is the name of the homeModule.
           They will be put inside `home-manager.''${user}.imports` list for this host.
 
-          When this list is not empty, the `home-manager.extraSpecialArgs` option
+          When this option is set, the `home-manager.extraSpecialArgs` option
           is also set to the one it would recieve in homeManagerConfigurations
           output, and the appropriate homeManager module is imported.
         '';
