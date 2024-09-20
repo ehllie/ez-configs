@@ -178,6 +178,23 @@ let
     else { }
   ;
 
+  injectEarly = earlyArgs: modules:
+    if earlyArgs == {}
+    then modules
+    else mapAttrs (_: path:
+      let
+        mod = import path;
+      in 
+      if lib.isFunction mod
+      then let 
+        modArgs = lib.functionArgs mod;
+        subArgs = lib.filterAttrs (name: _: builtins.hasAttr name modArgs) earlyArgs;
+        left = builtins.removeAttrs modArgs (builtins.attrNames subArgs);
+        func = args: mod (args // subArgs);
+      in lib.setFunctionArgs func left
+      else path
+    ) modules;
+
   # This is a workaround the types.attrsOf (type.submodule ...) functionality.
   # We can't ensure that each host/ user present in the appropriate directory
   # is also present in the attrset, so we need to create a default module for it.
@@ -298,6 +315,15 @@ let
       '';
     };
 
+    earlyModuleArgs = mkOption {
+      default = cfg.earlyModuleArgs;
+      defaultText = literalExpression "ezConfigs.earlyModuleArgs";
+      type = types.attrsOf types.anything;
+      description = ''
+        Extra arguments to pass to all ${configType}Modules before exporting them.
+      '';
+    };
+
   } // (
     if configType == "home" then
       {
@@ -394,6 +420,15 @@ in
       '';
     };
 
+    earlyModuleArgs = mkOption {
+      default = { };
+      example = literalExpression "{ inherit inputs; }";
+      type = types.attrsOf types.anything;
+      description = ''
+        Extra arguments to pass to all modules before exporting them.
+      '';
+    };
+
     home = configurationOptions "home";
 
     nixos = configurationOptions "nixos";
@@ -402,9 +437,9 @@ in
   };
 
   config.flake = rec {
-    homeModules = readModules cfg.home.modulesDirectory;
-    nixosModules = readModules cfg.nixos.modulesDirectory;
-    darwinModules = readModules cfg.darwin.modulesDirectory;
+    homeModules = injectEarly cfg.home.earlyModuleArgs (readModules cfg.home.modulesDirectory);
+    nixosModules = injectEarly cfg.home.earlyModuleArgs (readModules cfg.nixos.modulesDirectory);
+    darwinModules = injectEarly cfg.home.earlyModuleArgs (readModules cfg.darwin.modulesDirectory);
 
     homeConfigurations = userConfigs
       {
