@@ -34,6 +34,10 @@
       ezConfigs = {
         root = ./.;
         globalArgs = { inherit inputs; };
+
+        nixos.hosts.example-nixos.userHomeModules = {
+          system-user = "example-user";
+        };
       };
     };
 }
