@@ -12,12 +12,21 @@
   outputs = inputs: inputs.flake-parts.lib.mkFlake
     { inherit inputs; }
     {
+      systems = [
+        "aarch64-darwin"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "x86_64-linux"
+      ];
       flake = {
         flakeModule = ./flake-module.nix;
         templates.default = {
           path = ./template;
           description = "A simple configuration template with ez-configs";
         };
+      };
+      perSystem = { pkgs, ... }: {
+        formatter = pkgs.nixpkgs-fmt;
       };
     };
 }

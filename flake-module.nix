@@ -74,8 +74,8 @@ let
         modules = [
           configModule
           { networking.hostName = lib.mkDefault "${name}"; }
-          ] ++ optionals importDefault [ (ezModules.default or { }) ]
-          ++ optionals (userHomeModules != [ ]) [
+        ] ++ optionals importDefault [ (ezModules.default or { }) ]
+        ++ optionals (userHomeModules != [ ]) [
           hmModule
           { home-manager.extraSpecialArgs = extraSpecialArgs // { ezModules = ezHomeModules; }; }
           ({ pkgs, ... }: {
@@ -179,21 +179,26 @@ let
   ;
 
   injectEarly = earlyArgs: modules:
-    if earlyArgs == {}
+    if earlyArgs == { }
     then modules
-    else mapAttrs (_: path:
-      let
-        mod = import path;
-      in 
-      if lib.isFunction mod
-      then let 
-        modArgs = lib.functionArgs mod;
-        subArgs = lib.filterAttrs (name: _: builtins.hasAttr name modArgs) earlyArgs;
-        left = builtins.removeAttrs modArgs (builtins.attrNames subArgs);
-        func = args: mod (args // subArgs);
-      in lib.setFunctionArgs func left
-      else path
-    ) modules;
+    else
+      mapAttrs
+        (_: path:
+          let
+            mod = import path;
+          in
+          if lib.isFunction mod
+          then
+            let
+              modArgs = lib.functionArgs mod;
+              subArgs = lib.filterAttrs (name: _: builtins.hasAttr name modArgs) earlyArgs;
+              left = builtins.removeAttrs modArgs (builtins.attrNames subArgs);
+              func = args: mod (args // subArgs);
+            in
+            lib.setFunctionArgs func left
+          else path
+        )
+        modules;
 
   # This is a workaround the types.attrsOf (type.submodule ...) functionality.
   # We can't ensure that each host/ user present in the appropriate directory
