@@ -438,8 +438,8 @@ in
 
   config.flake = rec {
     homeModules = injectEarly cfg.home.earlyModuleArgs (readModules cfg.home.modulesDirectory);
-    nixosModules = injectEarly cfg.home.earlyModuleArgs (readModules cfg.nixos.modulesDirectory);
-    darwinModules = injectEarly cfg.home.earlyModuleArgs (readModules cfg.darwin.modulesDirectory);
+    nixosModules = injectEarly cfg.nixos.earlyModuleArgs (readModules cfg.nixos.modulesDirectory);
+    darwinModules = injectEarly cfg.darwin.earlyModuleArgs (readModules cfg.darwin.modulesDirectory);
 
     homeConfigurations = userConfigs
       {
