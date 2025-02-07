@@ -137,7 +137,7 @@ let
             ${user} = homeManagerConfiguration {
               inherit (standalone) pkgs;
               extraSpecialArgs = extraSpecialArgs //
-                { inherit ezModules; } //
+                { inherit ezModules; inherit (standalone) pkgs; } //
                 # We still want to pass in osConfig even when there is none,
                 # so that modules evaluate properly when using that argument
                 (if passInOsConfig then { osConfig = { }; } else { });
