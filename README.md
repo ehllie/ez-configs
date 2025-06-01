@@ -20,7 +20,7 @@ In case of home manager configurations, it also includes the `darwin` or `linux`
 
 ## Usage
 
-If starting from scratch, you can use the template `nix flake new --template github:ehllie/ez-configs` inside the directory where you'd like to setup your flake.
+If starting from scratch, you can use the template `nix flake new --template github:ehllie/ez-configs .` inside the directory where you'd like to setup your flake.
 
 Otherwise, to your flake inputs add:
 
