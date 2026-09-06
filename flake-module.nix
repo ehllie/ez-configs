@@ -14,8 +14,8 @@ let
   userImports = { stdenv, userModules, ezModules, user, importDefault }:
     [ (userModules.${user} or { }) ] ++ # user module
     optionals importDefault ([ (ezModules.default or { }) ] ++ # default module
-    optionals stdenv.isDarwin [ (ezModules.darwin or { }) ] ++ # default darwin module
-    optionals stdenv.isLinux [ (ezModules.linux or { }) ]); # default linux module;
+    optionals stdenv.hostPlatform.isDarwin [ (ezModules.darwin or { }) ] ++ # default darwin module
+    optionals stdenv.hostPlatform.isLinux [ (ezModules.linux or { }) ]); # default linux module;
 
   # Creates an attrset of nixosConfigurations or darwinConfigurations.
   systemsWith =

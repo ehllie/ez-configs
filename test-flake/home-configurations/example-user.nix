@@ -18,7 +18,7 @@ in
       if (users ? system-user) then
         users.system-user.home else
         (
-          if pkgs.stdenv.isDarwin then
+          if pkgs.stdenv.hostPlatform.isDarwin then
             "/Users/${username}" else
             "/home/${username}"
         );
